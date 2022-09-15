@@ -14,6 +14,6 @@
         ];
       }
       {
-        devShells = std.harvest inputs.self [ "example" "devshells" ];
+        devShells = std.harvest inputs.self [ "automation" "devshells" ];
       };
 }
