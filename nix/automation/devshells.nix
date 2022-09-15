@@ -8,6 +8,7 @@ in
 l.mapAttrs (_: std.std.lib.mkShell) {
   default = { ... }: {
     name = "cocogitto-pr devshell";
+    imports = [ std.std.devshellProfiles.default ];
     nixago = [
       cell.configs.conform
       cell.configs.lefthook
