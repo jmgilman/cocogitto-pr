@@ -6,6 +6,7 @@ let
   l = nixpkgs.lib // builtins;
   entrypoint = std.std.lib.writeShellEntrypoint inputs {
     package = cell.packages.cocogitto;
+    runtimeInputs = [ cell.packages.gitTiny ];
     entrypoint = ''
       cog --help
     '';
