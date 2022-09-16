@@ -5,7 +5,7 @@ let
   inherit (inputs) nixpkgs std;
   l = nixpkgs.lib // builtins;
   entrypoint = std.std.lib.writeShellEntrypoint inputs {
-    package = nixpkgs.cocogitto;
+    package = cell.packages.cocogitto;
     entrypoint = ''
       cog --help
     '';
