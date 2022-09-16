@@ -11,6 +11,7 @@
           (std.blockTypes.devshells "devshells")
           (std.blockTypes.nixago "configs")
           (std.blockTypes.containers "containers")
+          (std.blockTypes.installables "packages")
         ];
       }
       {
