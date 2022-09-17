@@ -1,6 +1,6 @@
 {
   inputs.n2c.url = "github:nlewo/nix2container";
-  inputs.std.url = "github:divnix/std";
+  inputs.std.url = "github:jmgilman/std/oci";
   inputs.nixpkgs.url = "nixpkgs";
   outputs = { std, ... } @ inputs:
     std.growOn
@@ -12,6 +12,7 @@
           (std.blockTypes.nixago "configs")
           (std.blockTypes.containers "containers")
           (std.blockTypes.installables "packages")
+          (std.blockTypes.functions "functions")
         ];
       }
       {
