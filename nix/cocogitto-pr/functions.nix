@@ -67,7 +67,7 @@ rec {
       ];
 
       config = {
-        inherit name perms tag;
+        inherit name perms;
 
         layers = [
           (n2c.buildLayer {
@@ -101,7 +101,7 @@ rec {
           Entrypoint = [ "/bin/entrypoint" ];
           Labels = l.mapAttrs' (n: v: l.nameValuePair "org.opencontainers.image.${n}" v) labels;
         };
-      };
+      } // l.optionalAttrs (tag != "") { inherit tag; };
     in
     n2c.buildImage (l.recursiveUpdate config options);
 }
