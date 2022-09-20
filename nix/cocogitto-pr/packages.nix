@@ -6,7 +6,7 @@ let
   inherit (inputs) nixpkgs;
   l = nixpkgs.lib // builtins;
 in
-{
+rec {
   gitTiny = nixpkgs.gitMinimal.override { perlSupport = false; };
   cocogitto =
     let
@@ -47,6 +47,23 @@ in
         maintainers = with maintainers; [ travisdavis-ops ];
       };
     };
-  main = nixpkgs.writeShellScriptBin "main"
-    ("#!${nixpkgs.pkgsStatic.bash.out}/bin/bash\n" + ./scripts/main.sh);
+  main = nixpkgs.writeShellScriptBin "main" (builtins.readFile ./scripts/main.sh);
+  main_operable = cell.functions.mkOperable {
+    package = main;
+    runtimeScript = ''
+      ${l.getExe main} "''${1}" "''${2}"
+    '';
+    runtimeInputs = [
+      cell.packages.cocogitto
+      cell.packages.gitTiny
+      nixpkgs.gh
+    ];
+    livenessProbe = nixpkgs.writeShellScriptBin "livenessProbe" ''
+      echo "I'm alive!"
+    '';
+    readinessProbe = nixpkgs.writeShellScriptBin "readinessProbe" ''
+      echo "I'm ready!"
+    '';
+  };
+
 }

@@ -38,20 +38,37 @@ rec {
   mkOCI =
     { name
     , operable
+    , tag ? ""
+    , setup ? [ ]
+    , perms ? { }
     , labels ? { }
     , isCommand ? false
+    , debug ? false
+    , options ? { }
     }:
     let
       livenessLink = l.optionalString (operable.passthru.livenessProbe != null) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
       readinessLink = l.optionalString (operable.passthru.readinessProbe != null) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
+
       mkLinks = nixpkgs.runCommand "mkLinks" { } ''
         mkdir -p $out/bin
         ln -s ${l.getExe operable} $out/bin/entrypoint
         ${livenessLink}
         ${readinessLink}
       '';
+
+      rootLayer = [ mkLinks ]
+        ++ setup
+        ++ l.optionals debug [
+        (nixpkgs.buildEnv {
+          name = "root";
+          paths = [ nixpkgs.bashInteractive nixpkgs.coreutils ];
+          pathsToLink = [ "/bin" ];
+        })
+      ];
+
       config = {
-        inherit name;
+        inherit name perms tag;
 
         layers = [
           (n2c.buildLayer {
@@ -75,17 +92,18 @@ rec {
             maxLayers = 10;
           })
         ];
-        maxLayers = 50;
 
-        copyToRoot = mkLinks;
+        maxLayers = 50;
+        copyToRoot = rootLayer;
 
         config = {
           User = "65534"; # nobody
           Group = "65534"; # nobody
           Labels = l.mapAttrs' (n: v: l.nameValuePair "org.opencontainers.image.${n}" v) labels;
-        } // (if isCommand then
-          { Cmd = [ (l.getExe operable) ]; } else { Entrypoint = [ (l.getExe operable) ]; });
+        }
+        // (if isCommand then
+          { Cmd = [ "/bin/entrypoint" ]; } else { Entrypoint = [ "/bin/entrypoint" ]; });
       };
     in
-    n2c.buildImage config;
+    n2c.buildImage (l.recursiveUpdate config options);
 }

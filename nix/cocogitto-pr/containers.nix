@@ -15,6 +15,10 @@ let
   #     ${l.getExe cell.packages.main} "''${1}" "''${2}"
   #   '';
   # };
+
+  setupWork = nixpkgs.runCommand "setup-work" { } ''
+    mkdir -p $out/work
+  '';
 in
 {
   # default = entrypoint.mkOCI {
@@ -32,33 +36,32 @@ in
   #     };
   #   };
   # };
-  default = cell.functions.mkOCI {
-    name = "docker.io/cocogitto-pr";
-    operable = cell.functions.mkOperable {
-      package = cell.packages.main;
-      runtimeScript = ''
-        ${l.getExe cell.packages.main} "''${1}" "''${2}"
-      '';
-      runtimeInputs = [
-        cell.packages.cocogitto
-        cell.packages.gitTiny
-        nixpkgs.gh
+  default = cell.functions.mkOCI
+    {
+      name = "docker.io/cocogitto-pr";
+      tag = "latest";
+      operable = cell.packages.main_operable;
+      setup = [ setupWork ];
+      debug = true;
+      perms = [
+        {
+          path = setupWork;
+          regex = ".*";
+          mode = "0777";
+        }
       ];
-      livenessProbe = nixpkgs.writeShellScriptBin "livenessProbe" ''
-        echo "I'm alive!"
-      '';
-      readinessProbe = nixpkgs.writeShellScriptBin "readinessProbe" ''
-        echo "I'm ready!"
-      '';
+      options = {
+        config.Volumes."/work" = { };
+        config.WorkingDir = "/work";
+      };
+      labels = {
+        title = "cocogitto-pr";
+        version = "0.1.0";
+        url = "https://github.com/jmgilman/cocogitto-pr";
+        source = "https://github.com/jmgilman/cocogitto-pr";
+        description = ''
+          Github Action for generating preview PRs with cocogitto
+        '';
+      };
     };
-    labels = {
-      title = "cocogitto-pr";
-      version = "0.1.0";
-      url = "https://github.com/jmgilman/cocogitto-pr";
-      source = "https://github.com/jmgilman/cocogitto-pr";
-      description = ''
-        Github Action for generating preview PRs with cocogitto
-      '';
-    };
-  };
 }
