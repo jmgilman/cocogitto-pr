@@ -42,7 +42,6 @@ rec {
     , setup ? [ ]
     , perms ? { }
     , labels ? { }
-    , isCommand ? false
     , debug ? false
     , options ? { }
     }:
@@ -99,10 +98,9 @@ rec {
         config = {
           User = "65534"; # nobody
           Group = "65534"; # nobody
+          Entrypoint = [ "/bin/entrypoint" ];
           Labels = l.mapAttrs' (n: v: l.nameValuePair "org.opencontainers.image.${n}" v) labels;
-        }
-        // (if isCommand then
-          { Cmd = [ "/bin/entrypoint" ]; } else { Entrypoint = [ "/bin/entrypoint" ]; });
+        };
       };
     in
     n2c.buildImage (l.recursiveUpdate config options);
