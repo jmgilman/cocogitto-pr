@@ -57,6 +57,7 @@ rec {
       cell.packages.cocogitto
       cell.packages.gitTiny
       nixpkgs.gh
+      nixpkgs.gnugrep
     ];
     livenessProbe = nixpkgs.writeShellScriptBin "livenessProbe" ''
       echo "I'm alive!"

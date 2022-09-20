@@ -7,6 +7,9 @@ log() {
 BRANCH="${1}"
 FILENAME="${2}"
 
+# Trust this directory
+git config --global --add safe.directory "$(pwd)"
+
 log "Starting..."
 
 VERSION=$(cog bump --auto --dry-run 2>/dev/null)
