@@ -7,92 +7,85 @@ let
   n2c = inputs.n2c.packages.nix2container;
 in
 rec {
-  /*
-     Creates an entrypoint for a container.
-
-     Args:
-      contents: The string contents of the entrypoint script (written in bash)
-      env: An attribute set of environment variables to set in the entrypoint
-
-    Returns:
-      A derivation that will build the entrypoint script.
-   */
-  mkEntrypoint = { contents, env ? { } }:
+  mkOperable =
+    { package
+    , runtimeScript
+    , runtimeEnv ? { }
+    , runtimeInputs ? [ ]
+    , livenessProbe ? null
+    , readinessProbe ? null
+    }:
     let
-      header = ''
-        #!${nixpkgs.pkgsStatic.bash.out}/bin/bash
-
-        set -euo pipefail
-
-        ${l.concatStringsSep "\n" (l.mapAttrsToList (n: v: "export ${n}=${''"$''}{${n}:-${toString v}}${''"''}") env)}
+      text = ''
+        ${l.concatStringsSep "\n" (l.mapAttrsToList (n: v: "export ${n}=${''"$''}{${n}:-${toString v}}${''"''}") runtimeEnv)}
+        ${runtimeScript}
       '';
     in
-    nixpkgs.writeShellScriptBin "entrypoint"
-      ''
-        ${header}
-        ${contents}
-      '';
-  /*
-    Creates a configuration intended to be consumed by nix2container.buildImage.
+    (nixpkgs.writeShellApplication
+      {
+        inherit text runtimeInputs;
+        name = "operable-${package.name}";
+      }) // {
+      passthru = {
+        inherit package runtimeInputs;
+      } // l.optionalAttrs (livenessProbe != null) {
+        inherit livenessProbe;
+      } // l.optionalAttrs (readinessProbe != null) {
+        inherit readinessProbe;
+      };
+    };
 
-    Args:
-      name: The name of the container
-      package: The primary application package to run in the container. This
-        package will be isolated to a separate layer for caching purposes.
-      entrypoint: The entrypoint to use for the container. This should be a
-        derivation created by mkEntrypoint.
-      runtimeInputs: Additional list of runtime dependencies to include in the
-        container.
-      labels: An attribute set of image labels to apply to the container. The
-      names are automatically prepended with "org.opencontainers.image".
-      isCommand: Whether or not the entrypoint should be treated as a CMD.
-        Defaults to false.
-
-    Returns:
-      An attribute set that can be passed to nix2container.buildImage.
-  */
-  mkImageConfig =
+  mkOCI =
     { name
-    , package
-    , entrypoint
-    , runtimeInputs ? [ ]
+    , operable
     , labels ? { }
     , isCommand ? false
     }:
     let
-      entrypoint' = l.getExe entrypoint;
-    in
-    {
-      inherit name;
-
-      layers = [
-        # Runtime input layer
-        (n2c.buildLayer {
-          copyToRoot = nixpkgs.buildEnv {
-            name = "runtimeInputs";
-            paths = runtimeInputs;
-            pathsToLink = [ "/bin" ];
-          };
-          maxLayers = 10;
-        })
-        # Package layer
-        (n2c.buildLayer {
-          copyToRoot = nixpkgs.buildEnv {
-            name = "package";
-            paths = [ package ];
-            pathsToLink = [ "/bin" ];
-          };
-          maxLayers = 90;
-        })
-      ];
-
+      livenessLink = l.optionalString (operable.passthru.livenessProbe != null) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
+      readinessLink = l.optionalString (operable.passthru.readinessProbe != null) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
+      mkLinks = nixpkgs.runCommand "mkLinks" { } ''
+        mkdir -p $out/bin
+        ln -s ${l.getExe operable} $out/bin/entrypoint
+        ${livenessLink}
+        ${readinessLink}
+      '';
       config = {
-        User = "65534"; # nobody
-        Group = "65534"; # nobody
-        Labels = l.mapAttrs' (n: v: l.nameValuePair "org.opencontainers.image.${n}" v) labels;
-      } // (if isCommand then
-        { Cmd = [ entrypoint' ]; } else { Entrypoint = [ entrypoint' ]; });
-    };
-  # A convenience function for accessing nix2container.buildImage
-  buildImage = config: n2c.buildImage (mkImageConfig config);
+        inherit name;
+
+        layers = [
+          (n2c.buildLayer {
+            copyToRoot = [ operable.passthru.package ];
+            maxLayers = 10;
+            layers = [
+              (n2c.buildLayer {
+                deps = [ operable ];
+                maxLayers = 10;
+              })
+              (n2c.buildLayer {
+                deps = operable.passthru.runtimeInputs;
+                maxLayers = 10;
+              })
+            ];
+          })
+          (n2c.buildLayer {
+            deps = [ ]
+              ++ (l.optionals (operable.passthru ? livenessProbe) [ (n2c.buildLayer { deps = [ operable.passthru.livenessProbe ]; }) ])
+              ++ (l.optionals (operable.passthru ? readinessProbe) [ (n2c.buildLayer { deps = [ operable.passthru.readinessProbe ]; }) ]);
+            maxLayers = 10;
+          })
+        ];
+        maxLayers = 50;
+
+        copyToRoot = mkLinks;
+
+        config = {
+          User = "65534"; # nobody
+          Group = "65534"; # nobody
+          Labels = l.mapAttrs' (n: v: l.nameValuePair "org.opencontainers.image.${n}" v) labels;
+        } // (if isCommand then
+          { Cmd = [ (l.getExe operable) ]; } else { Entrypoint = [ (l.getExe operable) ]; });
+      };
+    in
+    n2c.buildImage config;
 }

@@ -47,6 +47,6 @@ in
         maintainers = with maintainers; [ travisdavis-ops ];
       };
     };
-  main = nixpkgs.writeShellScriptBin "cocogitto-pr-main"
+  main = nixpkgs.writeShellScriptBin "main"
     ("#!${nixpkgs.pkgsStatic.bash.out}/bin/bash\n" + ./scripts/main.sh);
 }

@@ -4,23 +4,17 @@
 let
   inherit (inputs) nixpkgs std;
   l = nixpkgs.lib // builtins;
-  entrypoint = std.std.lib.writeShellEntrypoint inputs {
-    package = cell.packages.main;
-    runtimeInputs = [
-      cell.packages.cocogitto
-      cell.packages.gitTiny
-      nixpkgs.gh
-    ];
-    entrypoint = ''
-      ${l.getExe cell.packages.main} "''${1}" "''${2}"
-    '';
-  };
-
-  ep = cell.functions.mkEntrypoint {
-    contents = ''
-      ${l.getExe cell.packages.main} "''${1}" "''${2}"
-    '';
-  };
+  # entrypoint = std.std.lib.writeShellEntrypoint inputs {
+  #   package = cell.packages.main;
+  #   runtimeInputs = [
+  #     cell.packages.cocogitto
+  #     cell.packages.gitTiny
+  #     nixpkgs.gh
+  #   ];
+  #   entrypoint = ''
+  #     ${l.getExe cell.packages.main} "''${1}" "''${2}"
+  #   '';
+  # };
 in
 {
   # default = entrypoint.mkOCI {
@@ -38,21 +32,25 @@ in
   #     };
   #   };
   # };
-  default = cell.functions.buildImage {
+  default = cell.functions.mkOCI {
     name = "docker.io/cocogitto-pr";
-    package = cell.packages.main;
-    entrypoint = cell.functions.mkEntrypoint {
-      contents = ''
+    operable = cell.functions.mkOperable {
+      package = cell.packages.main;
+      runtimeScript = ''
         ${l.getExe cell.packages.main} "''${1}" "''${2}"
       '';
+      runtimeInputs = [
+        cell.packages.cocogitto
+        cell.packages.gitTiny
+        nixpkgs.gh
+      ];
+      livenessProbe = nixpkgs.writeShellScriptBin "livenessProbe" ''
+        echo "I'm alive!"
+      '';
+      readinessProbe = nixpkgs.writeShellScriptBin "readinessProbe" ''
+        echo "I'm ready!"
+      '';
     };
-    runtimeInputs = [
-      cell.packages.cocogitto
-      cell.packages.gitTiny
-      nixpkgs.gh
-      nixpkgs.bash
-      nixpkgs.coreutils
-    ];
     labels = {
       title = "cocogitto-pr";
       version = "0.1.0";
