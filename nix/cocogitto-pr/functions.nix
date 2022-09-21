@@ -84,6 +84,7 @@ rec {
     , perms ? [ ]
     , labels ? { }
     , debug ? false
+    , debugInputs ? [ ]
     , options ? { }
     }:
     let
@@ -102,7 +103,7 @@ rec {
         ++ l.optionals debug [
         (nixpkgs.buildEnv {
           name = "root";
-          paths = [ nixpkgs.bashInteractive nixpkgs.coreutils ];
+          paths = [ nixpkgs.bashInteractive nixpkgs.coreutils ] ++ debugInputs;
           pathsToLink = [ "/bin" ];
         })
       ];
