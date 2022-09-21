@@ -6,7 +6,12 @@ let
   l = nixpkgs.lib // builtins;
 
   setupWork = cell.functions.mkSetup "work" { } ''
-    mkdir -p $out/work
+    mkdir -p $out/etc
+    cat >$out/etc/gitconfig <<EOF
+    [safe]
+        directory = /work
+    EOF
+    mkdir $out/work
   '';
   setupUser = cell.functions.mkUser {
     user = "user";
