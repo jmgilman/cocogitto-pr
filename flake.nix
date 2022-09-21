@@ -1,5 +1,5 @@
 {
-  inputs.n2c.url = "github:nlewo/nix2container";
+  inputs.n2c.url = "github:jmgilman/nix2container/change-owner";
   inputs.std.url = "github:jmgilman/std/oci";
   inputs.nixpkgs.url = "nixpkgs";
   outputs = { std, ... } @ inputs:

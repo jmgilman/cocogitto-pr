@@ -7,12 +7,21 @@ let
   n2c = inputs.n2c.packages.nix2container;
 in
 rec {
-  mkUserSetup = { user, uid, group, gid }:
-    nixpkgs.runCommand "setup-users" { } ''
-      export PATH=${nixpkgs.shadow}/bin:$PATH
+  mkUser = { user, uid, group, gid, withHome ? false }:
+    let
+      perms = l.optionalAttrs withHome {
+        regex = "/home/${user}";
+        mode = "0744";
+        uid = l.toInt uid;
+        gid = l.toInt gid;
+        uname = user;
+        gname = group;
+      };
+    in
+    mkSetup "users" perms (''
       mkdir -p $out/etc/pam.d
 
-      echo "${user}:x:${uid}:${gid}::/home/${user}:${nixpkgs.runtimeShell}" > $out/etc/passwd
+      echo "${user}:x:${uid}:${gid}::" > $out/etc/passwd
       echo "${user}:!x:::::::" > $out/etc/shadow
 
       echo "${group}:x:${gid}:" > $out/etc/group
@@ -26,7 +35,16 @@ rec {
       EOF
 
       touch $out/etc/login.defs
-    '';
+    '' + l.optionalString withHome "\nmkdir -p $out/home/${user}");
+
+  mkSetup = name: perms: script:
+    let
+      setup = nixpkgs.runCommand "oci-setup-${name}" { } script;
+    in
+    setup // l.optionalAttrs (perms != { })
+      (
+        l.recursiveUpdate { passthru.perms = perms; } { passthru.perms.path = setup; }
+      );
 
   mkOperable =
     { package
@@ -63,7 +81,7 @@ rec {
     , setup ? [ ]
     , uid ? "65534"
     , gid ? "65534"
-    , perms ? { }
+    , perms ? [ ]
     , labels ? { }
     , debug ? false
     , options ? { }
@@ -88,9 +106,10 @@ rec {
           pathsToLink = [ "/bin" ];
         })
       ];
-
       config = {
-        inherit name perms;
+        inherit name;
+
+        perms = (l.map (s: l.optionalAttrs (s ? passthru && s.passthru ? perms) s.passthru.perms) setup) ++ perms;
 
         layers = [
           (n2c.buildLayer {

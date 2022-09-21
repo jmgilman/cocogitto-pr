@@ -5,14 +5,15 @@ let
   inherit (inputs) nixpkgs std;
   l = nixpkgs.lib // builtins;
 
-  setupWork = nixpkgs.runCommand "setup-work" { } ''
+  setupWork = cell.functions.mkSetup "work" { } ''
     mkdir -p $out/work
   '';
-  setupUser = cell.functions.mkUserSetup {
+  setupUser = cell.functions.mkUser {
     user = "user";
     group = "user";
     uid = "1000";
     gid = "1000";
+    withHome = true;
   };
 in
 {
@@ -25,13 +26,6 @@ in
       uid = "1000";
       gid = "1000";
       debug = true;
-      perms = [
-        {
-          path = setupWork;
-          regex = ".*";
-          mode = "0777";
-        }
-      ];
       options = {
         config.Volumes."/work" = { };
         config.WorkingDir = "/work";
