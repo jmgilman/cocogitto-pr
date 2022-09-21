@@ -7,6 +7,27 @@ let
   n2c = inputs.n2c.packages.nix2container;
 in
 rec {
+  mkUserSetup = { user, uid, group, gid }:
+    nixpkgs.runCommand "setup-users" { } ''
+      export PATH=${nixpkgs.shadow}/bin:$PATH
+      mkdir -p $out/etc/pam.d
+
+      echo "${user}:x:${uid}:${gid}::/home/${user}:${nixpkgs.runtimeShell}" > $out/etc/passwd
+      echo "${user}:!x:::::::" > $out/etc/shadow
+
+      echo "${group}:x:${gid}:" > $out/etc/group
+      echo "${group}:x::" > $out/etc/gshadow
+
+      cat > $out/etc/pam.d/other <<EOF
+      account sufficient pam_unix.so
+      auth sufficient pam_rootok.so
+      password requisite pam_unix.so nullok sha512
+      session required pam_unix.so
+      EOF
+
+      touch $out/etc/login.defs
+    '';
+
   mkOperable =
     { package
     , runtimeScript
@@ -40,6 +61,8 @@ rec {
     , operable
     , tag ? ""
     , setup ? [ ]
+    , uid ? "65534"
+    , gid ? "65534"
     , perms ? { }
     , labels ? { }
     , debug ? false
@@ -96,8 +119,8 @@ rec {
         copyToRoot = rootLayer;
 
         config = {
-          User = "65534"; # nobody
-          Group = "65534"; # nobody
+          User = uid;
+          Group = gid;
           Entrypoint = [ "/bin/entrypoint" ];
           Labels = l.mapAttrs' (n: v: l.nameValuePair "org.opencontainers.image.${n}" v) labels;
         };
