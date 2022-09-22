@@ -7,6 +7,39 @@ let
   n2c = inputs.n2c.packages.nix2container;
 in
 rec {
+  /*
+    Creates a new setup task for configuring a container.
+
+    Args:
+      name: A name for the task.
+      perms: An attribute set of permissions to set for this task.
+      contents: The contents of the setup task. This is a bash script.
+
+    Returns:
+      A setup task.
+  */
+  mkSetup = name: perms: contents:
+    let
+      setup = nixpkgs.runCommand "oci-setup-${name}" { } contents;
+    in
+    setup // l.optionalAttrs (perms != { })
+      (
+        l.recursiveUpdate { passthru.perms = perms; } { passthru.perms.path = setup; }
+      );
+
+  /*
+    Creates a setup task which adds the given user to the container.
+
+    Args:
+      user: Username
+      uid: User ID
+      group: Group name
+      gid: Group ID
+      withHome: If true, creates a home directory for the user.
+
+    Returns:
+      A setup task which adds the user to the container.
+  */
   mkUser = { user, uid, group, gid, withHome ? false }:
     let
       perms = l.optionalAttrs withHome {
@@ -18,6 +51,7 @@ rec {
         gname = group;
       };
     in
+    # https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/docker/default.nix#L177-L199
     mkSetup "users" perms (''
       mkdir -p $out/etc/pam.d
 
@@ -37,15 +71,20 @@ rec {
       touch $out/etc/login.defs
     '' + l.optionalString withHome "\nmkdir -p $out/home/${user}");
 
-  mkSetup = name: perms: script:
-    let
-      setup = nixpkgs.runCommand "oci-setup-${name}" { } script;
-    in
-    setup // l.optionalAttrs (perms != { })
-      (
-        l.recursiveUpdate { passthru.perms = perms; } { passthru.perms.path = setup; }
-      );
+  /*
+    Makes a package operable by configuring the necessary runtime environment.
 
+    Args:
+      package: The package to wrap.
+      runtimeScript: A bash script to run at runtime.
+      runtimeEnv: An attribute set of environment variables to set at runtime.
+      runtimeInputs: A list of packages to add to the runtime environment.
+      livenessProbe: An optional derivation to run to check if the program is alive.
+      readinessProbe: An optional derivation to run to check if the program is ready.
+
+    Returns:
+      An operable for the given package.
+  */
   mkOperable =
     { package
     , runtimeScript
@@ -55,6 +94,8 @@ rec {
     , readinessProbe ? null
     }:
     let
+      # Exports environment variables to the runtime environment before running
+      # the runtime script
       text = ''
         ${l.concatStringsSep "\n" (l.mapAttrsToList (n: v: "export ${n}=${''"$''}{${n}:-${toString v}}${''"''}") runtimeEnv)}
         ${runtimeScript}
@@ -65,6 +106,7 @@ rec {
         inherit text runtimeInputs;
         name = "operable-${package.name}";
       }) // {
+      # The livenessProbe and readinessProbe are picked up in later stages
       passthru = {
         inherit package runtimeInputs;
       } // l.optionalAttrs (livenessProbe != null) {
@@ -74,6 +116,26 @@ rec {
       };
     };
 
+  /*
+    Creates an OCI container image using the given operable.
+
+    Args:
+      name: The name of the image.
+      tag: Optional tag of the image (defaults to output hash)
+      setup: A list of setup tasks to run to configure the container.
+      uid: The user ID to run the container as.
+      gid: The group ID to run the container as.
+      perms: A list of permissions to set for the container.
+      labels: An attribute set of labels to set for the container. The keys are
+        automatically prefixed with "org.opencontainers.image".
+      debug: Whether to include debug tools in the container (bash, coreutils).
+      debugInputs: Additional packages to include in the container if debug is
+        enabled.
+      options: Additional options to pass to nix2container.
+
+    Returns:
+      An OCI container image (created with nix2container).
+  */
   mkOCI =
     { name
     , operable
@@ -88,9 +150,12 @@ rec {
     , options ? { }
     }:
     let
+      # Links liveness and readiness probes (if present) to /bin/* for
+      # convenience
       livenessLink = l.optionalString (operable.passthru.livenessProbe != null) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
       readinessLink = l.optionalString (operable.passthru.readinessProbe != null) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
 
+      # Links the entrypoint to /entrypoint for convenience
       mkLinks = nixpkgs.runCommand "mkLinks" { } ''
         mkdir -p $out/bin
         ln -s ${l.getExe operable} $out/bin/entrypoint
@@ -98,6 +163,8 @@ rec {
         ${readinessLink}
       '';
 
+      # The root layer contains all of the setup tasks and any additional debug
+      # inputs if enabled
       rootLayer = [ mkLinks ]
         ++ setup
         ++ l.optionals debug [
@@ -107,26 +174,33 @@ rec {
           pathsToLink = [ "/bin" ];
         })
       ];
+      # This is what get passed to nix2container.buildImage
       config = {
         inherit name;
 
+        # Setup tasks can include permissions via the passthru.perms attribute
         perms = (l.map (s: l.optionalAttrs (s ? passthru && s.passthru ? perms) s.passthru.perms) setup) ++ perms;
 
+        # Layers are nested to reduce duplicate paths in the image
         layers = [
+          # Primary layer is the package layer
           (n2c.buildLayer {
             copyToRoot = [ operable.passthru.package ];
-            maxLayers = 10;
+            maxLayers = 40;
             layers = [
+              # Entrypoint layer
               (n2c.buildLayer {
                 deps = [ operable ];
                 maxLayers = 10;
               })
+              # Runtime inputs layer
               (n2c.buildLayer {
                 deps = operable.passthru.runtimeInputs;
                 maxLayers = 10;
               })
             ];
           })
+          # Liveness and readiness probe layer
           (n2c.buildLayer {
             deps = [ ]
               ++ (l.optionals (operable.passthru ? livenessProbe) [ (n2c.buildLayer { deps = [ operable.passthru.livenessProbe ]; }) ])
@@ -135,6 +209,7 @@ rec {
           })
         ];
 
+        # Max layers is 127, we only go up to 120
         maxLayers = 50;
         copyToRoot = rootLayer;
 
@@ -148,3 +223,4 @@ rec {
     in
     n2c.buildImage (l.recursiveUpdate config options);
 }
+
