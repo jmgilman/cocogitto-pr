@@ -47,7 +47,11 @@ rec {
         maintainers = with maintainers; [ travisdavis-ops ];
       };
     };
-  main = nixpkgs.writeShellScriptBin "main" (builtins.readFile ./scripts/main.sh);
+  main = cell.functions.writeScript {
+    name = "main";
+    text = (builtins.readFile ./scripts/main.sh);
+    runtimeShell = nixpkgs.pkgsStatic.bash.out;
+  };
   main_operable = cell.functions.mkOperable {
     package = main;
     runtimeScript = ''
@@ -57,7 +61,6 @@ rec {
       cell.packages.cocogitto
       cell.packages.gitTiny
       nixpkgs.gh
-      nixpkgs.gnugrep
     ];
     runtimeShell = nixpkgs.pkgsStatic.bash.out;
   };

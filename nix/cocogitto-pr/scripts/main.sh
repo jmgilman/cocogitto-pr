@@ -1,5 +1,3 @@
-set -euo pipefail
-
 log() {
     echo "[cocogitto-pr] >>> ${1}"
 }
