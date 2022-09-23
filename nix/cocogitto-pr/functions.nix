@@ -90,6 +90,7 @@ rec {
     , runtimeScript
     , runtimeEnv ? { }
     , runtimeInputs ? [ ]
+    , debugInputs ? [ ]
     , livenessProbe ? null
     , readinessProbe ? null
     }:
@@ -101,7 +102,7 @@ rec {
       }) // {
       # The livenessProbe and readinessProbe are picked up in later stages
       passthru = {
-        inherit package runtimeInputs;
+        inherit package runtimeInputs debugInputs;
       } // l.optionalAttrs (livenessProbe != null) {
         inherit livenessProbe;
       } // l.optionalAttrs (readinessProbe != null) {
@@ -139,7 +140,6 @@ rec {
     , perms ? [ ]
     , labels ? { }
     , debug ? false
-    , debugInputs ? [ ]
     , options ? { }
     }:
     let
@@ -155,7 +155,7 @@ rec {
       debugShell = writeScript {
         name = "debug";
         runtimeInputs = [ nixpkgs.bashInteractive nixpkgs.coreutils ]
-          ++ debugInputs
+          ++ operable.passthru.debugInputs
           ++ operable.passthru.runtimeInputs;
         text = ''
           cat ${debug-banner}
