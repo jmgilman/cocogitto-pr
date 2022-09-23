@@ -155,25 +155,41 @@ rec {
       livenessLink = l.optionalString (operable.passthru.livenessProbe != null) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
       readinessLink = l.optionalString (operable.passthru.readinessProbe != null) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
 
-      # Links the entrypoint to /entrypoint for convenience
-      mkLinks = nixpkgs.runCommand "mkLinks" { } ''
+      # Configure debug shell
+      debug-banner = nixpkgs.runCommandNoCC "debug-banner" { } ''
+        ${nixpkgs.figlet}/bin/figlet -f banner "STD Debug" > $out
+      '';
+      debugShell = nixpkgs.writeShellApplication {
+        name = "debug";
+        runtimeInputs = [ nixpkgs.bashInteractive nixpkgs.coreutils ]
+          ++ debugInputs
+          ++ operable.passthru.runtimeInputs;
+        text = ''
+          cat ${debug-banner}
+          echo
+          echo "=========================================================="
+          echo "This debug shell contains the runtime environment and "
+          echo "debug dependencies of the entrypoint."
+          echo "To inspect the entrypoint run:"
+          echo "cat /bin/entrypoint"
+          echo "=========================================================="
+          echo
+          exec bash "$@"
+        '';
+      };
+      debugShellLink = l.optionalString debug "ln -s ${l.getExe debugShell} $out/bin/debug";
+
+      setupLinks = mkSetup "links" { } ''
         mkdir -p $out/bin
         ln -s ${l.getExe operable} $out/bin/entrypoint
+        ${debugShellLink}
         ${livenessLink}
         ${readinessLink}
       '';
 
-      # The root layer contains all of the setup tasks and any additional debug
-      # inputs if enabled
-      rootLayer = [ mkLinks ]
-        ++ setup
-        ++ l.optionals debug [
-        (nixpkgs.buildEnv {
-          name = "root";
-          paths = [ nixpkgs.bashInteractive nixpkgs.coreutils ] ++ debugInputs;
-          pathsToLink = [ "/bin" ];
-        })
-      ];
+      # The root layer contains all of the setup tasks
+      rootLayer = [ setupLinks ] ++ setup;
+
       # This is what get passed to nix2container.buildImage
       config = {
         inherit name;
@@ -198,6 +214,13 @@ rec {
                 deps = operable.passthru.runtimeInputs;
                 maxLayers = 10;
               })
+            ]
+            # Optional debug layer
+            ++ l.optionals debug [
+              (n2c.buildLayer {
+                deps = [ debugShell ];
+                maxLayers = 10;
+              })
             ];
           })
           # Liveness and readiness probe layer
@@ -210,7 +233,7 @@ rec {
         ];
 
         # Max layers is 127, we only go up to 120
-        maxLayers = 50;
+        maxLayers = 40;
         copyToRoot = rootLayer;
 
         config = {
