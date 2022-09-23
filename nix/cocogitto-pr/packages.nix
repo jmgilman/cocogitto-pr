@@ -59,12 +59,7 @@ rec {
       nixpkgs.gh
       nixpkgs.gnugrep
     ];
-    livenessProbe = nixpkgs.writeShellScriptBin "livenessProbe" ''
-      echo "I'm alive!"
-    '';
-    readinessProbe = nixpkgs.writeShellScriptBin "readinessProbe" ''
-      echo "I'm ready!"
-    '';
+    runtimeShell = nixpkgs.pkgsStatic.bash.out;
   };
 
 }

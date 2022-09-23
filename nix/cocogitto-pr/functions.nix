@@ -90,19 +90,22 @@ rec {
     , runtimeScript
     , runtimeEnv ? { }
     , runtimeInputs ? [ ]
+    , runtimeShell ? null
     , debugInputs ? [ ]
     , livenessProbe ? null
     , readinessProbe ? null
     }:
     (writeScript
-      {
+      ({
         inherit runtimeInputs runtimeEnv;
         name = "operable-${package.name}";
         text = ''
           ${l.getExe nixpkgs.snore} "''${DEBUG_SLEEP:-0}"
           ${runtimeScript}
         '';
-      }) // {
+      } // l.optionalAttrs (runtimeShell != null) {
+        inherit runtimeShell;
+      })) // {
       # The livenessProbe and readinessProbe are picked up in later stages
       passthru = {
         inherit package runtimeInputs debugInputs;
@@ -148,8 +151,8 @@ rec {
     let
       # Links liveness and readiness probes (if present) to /bin/* for
       # convenience
-      livenessLink = l.optionalString (operable.passthru.livenessProbe != null) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
-      readinessLink = l.optionalString (operable.passthru.readinessProbe != null) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
+      livenessLink = l.optionalString (operable.passthru ? livenessProbe) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
+      readinessLink = l.optionalString (operable.passthru ? readinessProbe) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
 
       # Configure debug shell
       debug-banner = nixpkgs.runCommandNoCC "debug-banner" { } ''
@@ -157,7 +160,7 @@ rec {
       '';
       debugShell = writeScript {
         name = "debug";
-        runtimeInputs = [ nixpkgs.bashInteractive nixpkgs.coreutils ]
+        runtimeInputs = [ nixpkgs.coreutils ]
           ++ operable.passthru.debugInputs
           ++ operable.passthru.runtimeInputs;
         text = ''
@@ -256,6 +259,7 @@ rec {
       destination = "/bin/${name}";
       text = ''
         #!${runtimeShell}
+        # shellcheck shell=bash
         set -o errexit
         set -o pipefail
         set -o nounset
