@@ -190,6 +190,7 @@ rec {
         name = "debug-operable";
         runtimeInputs = [ nixpkgs.coreutils ];
         text = ''
+          set -x
           sleep "''${DEBUG_SLEEP:-0}"
           ${l.getExe operable} "$@"
         '';
@@ -219,23 +220,11 @@ rec {
           # Primary layer is the package layer
           (n2c.buildLayer {
             copyToRoot = [ operable.passthru.package ];
-            maxLayers = 40;
+            maxLayers = 50;
             layers = [
-              # Entrypoint layer
-              (n2c.buildLayer {
-                deps = [ operable' ];
-                maxLayers = 10;
-              })
               # Runtime inputs layer
               (n2c.buildLayer {
                 deps = operable.passthru.runtimeInputs;
-                maxLayers = 10;
-              })
-            ]
-            # Optional debug layer
-            ++ l.optionals debug [
-              (n2c.buildLayer {
-                deps = [ debugShell ];
                 maxLayers = 10;
               })
             ];
@@ -250,7 +239,7 @@ rec {
         ];
 
         # Max layers is 127, we only go up to 120
-        maxLayers = 40;
+        maxLayers = 50;
         copyToRoot = rootLayer;
 
         config = {
