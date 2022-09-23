@@ -100,7 +100,6 @@ rec {
         inherit runtimeInputs runtimeEnv;
         name = "operable-${package.name}";
         text = ''
-          ${l.getExe nixpkgs.snore} "''${DEBUG_SLEEP:-0}"
           ${runtimeScript}
         '';
       } // l.optionalAttrs (runtimeShell != null) {
@@ -186,9 +185,20 @@ rec {
         };
       debugShellLink = l.optionalString debug "ln -s ${l.getExe debugShell} $out/bin/debug";
 
+      # Wrap the operable with sleep if debug is enabled
+      debugOperable = writeScript {
+        name = "debug-operable";
+        runtimeInputs = [ nixpkgs.coreutils ];
+        text = ''
+          sleep "''${DEBUG_SLEEP:-0}"
+          ${l.getExe operable} "$@"
+        '';
+      };
+      operable' = if debug then debugOperable else operable;
+
       setupLinks = mkSetup "links" { } ''
         mkdir -p $out/bin
-        ln -s ${l.getExe operable} $out/bin/entrypoint
+        ln -s ${l.getExe operable'} $out/bin/entrypoint
         ${debugShellLink}
         ${livenessLink}
         ${readinessLink}
@@ -213,7 +223,7 @@ rec {
             layers = [
               # Entrypoint layer
               (n2c.buildLayer {
-                deps = [ operable ];
+                deps = [ operable' ];
                 maxLayers = 10;
               })
               # Runtime inputs layer
