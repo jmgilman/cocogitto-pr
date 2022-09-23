@@ -155,15 +155,27 @@ rec {
       livenessLink = l.optionalString (operable.passthru ? livenessProbe) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
       readinessLink = l.optionalString (operable.passthru ? readinessProbe) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
 
-      # Configure debug shell
+      # Get runtime shell
+      runtimeShell = if operable.passthru ? runtimeShell then operable.passthru.runtimeShell else nixpkgs.runtimeShell;
+      runtimeShellBin = if operable.passthru ? runtimeShell then (l.getExe operable.passthru.runtimeShell) else nixpkgs.runtimeShell;
+
+      # Configure runtime entrypoint
+      runtimeEntry =
+        writeScript {
+          inherit runtimeShell;
+          name = "runtime";
+          runtimeInputs = operable.passthru.runtimeInputs;
+          text = ''
+            exec ${runtimeShellBin}
+          '';
+        };
+      runtimeEntryLink = "ln -s ${l.getExe runtimeEntry} $out/bin/runtime";
+
+      # Configure debug entrypoint
       debug-banner = nixpkgs.runCommandNoCC "debug-banner" { } ''
         ${nixpkgs.figlet}/bin/figlet -f banner "STD Debug" > $out
       '';
-      debugShell =
-        let
-          runtimeShell = if operable.passthru ? runtimeShell then operable.passthru.runtimeShell else nixpkgs.runtimeShell;
-          runtimeShellBin = if operable.passthru ? runtimeShell then (l.getExe operable.passthru.runtimeShell) else nixpkgs.runtimeShell;
-        in
+      debugEntry =
         writeScript {
           inherit runtimeShell;
           name = "debug";
@@ -183,7 +195,7 @@ rec {
             exec ${runtimeShellBin} "$@"
           '';
         };
-      debugShellLink = l.optionalString debug "ln -s ${l.getExe debugShell} $out/bin/debug";
+      debugEntryLink = l.optionalString debug "ln -s ${l.getExe debugEntry} $out/bin/debug";
 
       # Wrap the operable with sleep if debug is enabled
       debugOperable = writeScript {
@@ -200,7 +212,8 @@ rec {
       setupLinks = mkSetup "links" { } ''
         mkdir -p $out/bin
         ln -s ${l.getExe operable'} $out/bin/entrypoint
-        ${debugShellLink}
+        ${runtimeEntryLink}
+        ${debugEntryLink}
         ${livenessLink}
         ${readinessLink}
       '';
