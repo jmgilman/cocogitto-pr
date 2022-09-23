@@ -98,7 +98,10 @@ rec {
       {
         inherit runtimeInputs runtimeEnv;
         name = "operable-${package.name}";
-        text = runtimeScript;
+        text = ''
+          ${l.getExe nixpkgs.snore} "''${DEBUG_SLEEP:-0}"
+          ${runtimeScript}
+        '';
       }) // {
       # The livenessProbe and readinessProbe are picked up in later stages
       passthru = {
