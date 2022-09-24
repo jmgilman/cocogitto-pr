@@ -61,6 +61,7 @@ rec {
       cell.packages.cocogitto
       cell.packages.gitTiny
       nixpkgs.gh
+      nixpkgs.gnugrep
     ];
     runtimeShell = nixpkgs.pkgsStatic.bash.out;
   };

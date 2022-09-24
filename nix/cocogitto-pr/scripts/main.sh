@@ -35,7 +35,7 @@ fi
 log "Updating and committing changelog..."
 echo "${CHANGELOG}" >CHANGELOG.md
 git add CHANGELOG.md
-git commit -m "chore: Update changelog for v${VERSION}"
+git commit --no-verify -m "chore: Update changelog for v${VERSION}"
 git push origin "${BRANCH}"
 
 log "Checking changelog PR status..."

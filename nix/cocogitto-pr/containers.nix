@@ -8,6 +8,9 @@ let
   setupWork = cell.functions.mkSetup "work" { } ''
     mkdir -p $out/etc
     cat >$out/etc/gitconfig <<EOF
+    [user]
+      name = "github-actions[bot]"
+      email = "41898282+github-actions[bot]@users.noreply.github.com"
     [safe]
         directory = /work
     EOF
