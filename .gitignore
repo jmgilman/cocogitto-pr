@@ -1,5 +1,6 @@
 .std
 result
+std
 
 # nixago: ignore-linked-files
 treefmt.toml

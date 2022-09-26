@@ -1,0 +1,15 @@
+name: 'Cocogitto PR'
+description: 'Github Action for generating preview PRs with cocogitto'
+inputs:
+  branch:
+    description: 'The branch to use for generating changelogs'
+    default: 'changelog'
+  filename:
+    description: 'The name of the changelog file'
+    default: 'CHANGELOG.md'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.branch }}
+    - ${{ inputs.filename }}
