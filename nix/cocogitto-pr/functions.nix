@@ -5,312 +5,148 @@ let
   inherit (inputs) nixpkgs std;
   l = nixpkgs.lib // builtins;
   n2c = inputs.n2c.packages.nix2container;
+  stdl = std.std.lib;
 in
-rec {
-  /*
-    Creates a new setup task for configuring a container.
-
-    Args:
-      name: A name for the task.
-      perms: An attribute set of permissions to set for this task.
-      contents: The contents of the setup task. This is a bash script.
-
-    Returns:
-      A setup task.
-  */
-  mkSetup = name: perms: contents:
-    let
-      setup = nixpkgs.runCommandNoCC "oci-setup-${name}" { } contents;
-    in
-    setup // l.optionalAttrs (perms != { })
-      (
-        l.recursiveUpdate { passthru.perms = perms; } { passthru.perms.path = setup; }
-      );
-
-  /*
-    Creates a setup task which adds the given user to the container.
-
-    Args:
-      user: Username
-      uid: User ID
-      group: Group name
-      gid: Group ID
-      withHome: If true, creates a home directory for the user.
-
-    Returns:
-      A setup task which adds the user to the container.
-  */
-  mkUser = { user, uid, group, gid, withHome ? false }:
-    let
-      perms = l.optionalAttrs withHome {
-        regex = "/home/${user}";
-        mode = "0744";
-        uid = l.toInt uid;
-        gid = l.toInt gid;
-        uname = user;
-        gname = group;
-      };
-    in
-    # https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/docker/default.nix#L177-L199
-    mkSetup "users" perms (''
-      mkdir -p $out/etc/pam.d
-
-      echo "${user}:x:${uid}:${gid}::" > $out/etc/passwd
-      echo "${user}:!x:::::::" > $out/etc/shadow
-
-      echo "${group}:x:${gid}:" > $out/etc/group
-      echo "${group}:x::" > $out/etc/gshadow
-
-      cat > $out/etc/pam.d/other <<EOF
-      account sufficient pam_unix.so
-      auth sufficient pam_rootok.so
-      password requisite pam_unix.so nullok sha512
-      session required pam_unix.so
-      EOF
-
-      touch $out/etc/login.defs
-    '' + l.optionalString withHome "\nmkdir -p $out/home/${user}");
-
-  /*
-    Makes a package operable by configuring the necessary runtime environment.
-
-    Args:
-      package: The package to wrap.
-      runtimeScript: A bash script to run at runtime.
-      runtimeEnv: An attribute set of environment variables to set at runtime.
-      runtimeInputs: A list of packages to add to the runtime environment.
-      livenessProbe: An optional derivation to run to check if the program is alive.
-      readinessProbe: An optional derivation to run to check if the program is ready.
-
-    Returns:
-      An operable for the given package.
-  */
-  mkOperable =
-    { package
-    , runtimeScript
-    , runtimeEnv ? { }
-    , runtimeInputs ? [ ]
-    , runtimeShell ? null
-    , debugInputs ? [ ]
-    , livenessProbe ? null
-    , readinessProbe ? null
-    }:
-    (writeScript
-      ({
-        inherit runtimeInputs runtimeEnv;
-        name = "operable-${package.name}";
-        text = ''
-          ${runtimeScript}
-        '';
-      } // l.optionalAttrs (runtimeShell != null) {
-        inherit runtimeShell;
-      })) // {
-      # The livenessProbe and readinessProbe are picked up in later stages
-      passthru = {
-        inherit package runtimeInputs debugInputs;
-      } // l.optionalAttrs (livenessProbe != null) {
-        inherit livenessProbe;
-      } // l.optionalAttrs (readinessProbe != null) {
-        inherit readinessProbe;
-      } // l.optionalAttrs (runtimeShell != null) {
-        inherit runtimeShell;
-      };
-    };
-
-  /*
-    Creates an OCI container image using the given operable.
-
-    Args:
-      name: The name of the image.
-      tag: Optional tag of the image (defaults to output hash)
-      setup: A list of setup tasks to run to configure the container.
-      uid: The user ID to run the container as.
-      gid: The group ID to run the container as.
-      perms: A list of permissions to set for the container.
-      labels: An attribute set of labels to set for the container. The keys are
-        automatically prefixed with "org.opencontainers.image".
-      debug: Whether to include debug tools in the container (bash, coreutils).
-      debugInputs: Additional packages to include in the container if debug is
-        enabled.
-      options: Additional options to pass to nix2container.
-
-    Returns:
-      An OCI container image (created with nix2container).
-  */
-  mkOCI =
+{
+  mkDevOCI =
     { name
-    , operable
+    , devshell
+    , runtimeShell ? nixpkgs.bashInteractive
     , tag ? ""
     , setup ? [ ]
-    , uid ? "65534"
-    , gid ? "65534"
     , perms ? [ ]
     , labels ? { }
-    , debug ? false
     , options ? { }
     }:
     let
-      # Links liveness and readiness probes (if present) to /bin/* for
-      # convenience
-      livenessLink = l.optionalString (operable.passthru ? livenessProbe) "ln -s ${l.getExe operable.passthru.livenessProbe} $out/bin/live";
-      readinessLink = l.optionalString (operable.passthru ? readinessProbe) "ln -s ${l.getExe operable.passthru.readinessProbe} $out/bin/ready";
-
-      # Get runtime shell
-      runtimeShell = if operable.passthru ? runtimeShell then operable.passthru.runtimeShell else nixpkgs.runtimeShell;
-      runtimeShellBin = if operable.passthru ? runtimeShell then (l.getExe operable.passthru.runtimeShell) else nixpkgs.runtimeShell;
-
-      # Configure runtime entrypoint
-      runtimeEntry =
-        writeScript {
-          inherit runtimeShell;
-          name = "runtime";
-          runtimeInputs = operable.passthru.runtimeInputs;
-          text = ''
-            exec ${runtimeShellBin}
-          '';
-        };
-      runtimeEntryLink = "ln -s ${l.getExe runtimeEntry} $out/bin/runtime";
-
-      # Configure debug entrypoint
-      debug-banner = nixpkgs.runCommandNoCC "debug-banner" { } ''
-        ${nixpkgs.figlet}/bin/figlet -f banner "STD Debug" > $out
-      '';
-      debugEntry =
-        writeScript {
-          inherit runtimeShell;
-          name = "debug";
-          runtimeInputs = [ nixpkgs.coreutils ]
-            ++ operable.passthru.debugInputs
-            ++ operable.passthru.runtimeInputs;
-          text = ''
-            cat ${debug-banner}
-            echo
-            echo "=========================================================="
-            echo "This debug shell contains the runtime environment and "
-            echo "debug dependencies of the entrypoint."
-            echo "To inspect the entrypoint run:"
-            echo "cat /bin/entrypoint"
-            echo "=========================================================="
-            echo
-            exec ${runtimeShellBin} "$@"
-          '';
-        };
-      debugEntryLink = l.optionalString debug "ln -s ${l.getExe debugEntry} $out/bin/debug";
-
-      # Wrap the operable with sleep if debug is enabled
-      debugOperable = writeScript {
-        name = "debug-operable";
-        runtimeInputs = [ nixpkgs.coreutils ];
-        text = ''
-          set -x
-          sleep "''${DEBUG_SLEEP:-0}"
-          ${l.getExe operable} "$@"
+      # Valid shells for direnv hook
+      shellName = l.baseNameOf (l.getExe runtimeShell);
+      shellConfigs = {
+        bash = ''
+          mkdir -p $out/home/user
+          cat >$out/home/user/.bashrc << EOF
+          eval "\$(direnv hook bash)"
+          EOF
+        '';
+        zsh = ''
+          mkdir -p $out/home/user
+          cat >$out/home/user/.zshrc << EOF
+          eval "\$(direnv hook zsh)"
+          EOF
         '';
       };
-      operable' = if debug then debugOperable else operable;
 
-      setupLinks = mkSetup "links" { } ''
-        mkdir -p $out/bin
-        ln -s ${l.getExe operable'} $out/bin/entrypoint
-        ${runtimeEntryLink}
-        ${debugEntryLink}
-        ${livenessLink}
-        ${readinessLink}
+      # Configure local user
+      setupUser = stdl.mkUser {
+        user = "user";
+        group = "user";
+        uid = "1000";
+        gid = "1000";
+        withHome = true;
+      };
+
+      # Configure working directory
+      setupWork = stdl.mkSetup "work" [ ] ''
+        mkdir -p $out/work
       '';
 
-      # The root layer contains all of the setup tasks
-      rootLayer = [ setupLinks ] ++ setup;
-
-      # This is what get passed to nix2container.buildImage
-      config = {
-        inherit name;
-
-        # Setup tasks can include permissions via the passthru.perms attribute
-        perms = (l.map (s: l.optionalAttrs (s ? passthru && s.passthru ? perms) s.passthru.perms) setup) ++ perms;
-
-        # Layers are nested to reduce duplicate paths in the image
-        layers = [
-          # Primary layer is the package layer
-          (n2c.buildLayer {
-            copyToRoot = [ operable.passthru.package ];
-            maxLayers = 50;
-            layers = [
-              # Runtime inputs layer
-              (n2c.buildLayer {
-                deps = operable.passthru.runtimeInputs;
-                maxLayers = 10;
-              })
-            ];
-          })
-          # Liveness and readiness probe layer
-          (n2c.buildLayer {
-            deps = [ ]
-              ++ (l.optionals (operable.passthru ? livenessProbe) [ (n2c.buildLayer { deps = [ operable.passthru.livenessProbe ]; }) ])
-              ++ (l.optionals (operable.passthru ? readinessProbe) [ (n2c.buildLayer { deps = [ operable.passthru.readinessProbe ]; }) ]);
-            maxLayers = 10;
-          })
-        ];
-
-        # Max layers is 127, we only go up to 120
-        maxLayers = 50;
-        copyToRoot = rootLayer;
-
-        config = {
-          User = uid;
-          Group = gid;
-          Entrypoint = [ "/bin/entrypoint" ];
-          Labels = l.mapAttrs' (n: v: l.nameValuePair "org.opencontainers.image.${n}" v) labels;
-        };
-      } // l.optionalAttrs (tag != "") { inherit tag; };
-    in
-    n2c.buildImage (l.recursiveUpdate config options);
-
-  writeScript =
-    { name
-    , text
-    , runtimeInputs ? [ ]
-    , runtimeEnv ? { }
-    , runtimeShell ? nixpkgs.runtimeShell
-    , checkPhase ? null
-    }:
-    let
-      runtimeShell' = if runtimeShell != nixpkgs.runtimeShell then (l.getExe runtimeShell) else runtimeShell;
-    in
-    nixpkgs.writeTextFile {
-      inherit name;
-      executable = true;
-      destination = "/bin/${name}";
-      text = ''
-        #!${runtimeShell'}
-        set -o errexit
-        set -o pipefail
-        set -o nounset
-        set -o functrace
-        set -o errtrace
-        set -o monitor
-        set -o posix
-        shopt -s dotglob
-
-      '' + l.optionalString (runtimeInputs != [ ]) ''
-        export PATH="${l.makeBinPath runtimeInputs}:$PATH"
-      '' + l.optionalString (runtimeEnv != { }) ''
-        ${l.concatStringsSep "\n" (l.mapAttrsToList (n: v: "export ${n}=${''"$''}{${n}:-${toString v}}${''"''}") runtimeEnv)}
-      '' +
-      ''
-
-        ${text}
-      '';
-
-      checkPhase =
-        if checkPhase == null then ''
-          runHook preCheck
-          ${nixpkgs.stdenv.shellDryRun} "$target"
-          ${nixpkgs.shellcheck}/bin/shellcheck "$target"
-          runHook postCheck
+      # Configure tmp directory
+      setupTemp = stdl.mkSetup "tmp"
+        [
+          {
+            regex = ".*";
+            mode = "0777";
+          }
+        ]
         ''
-        else checkPhase;
+          mkdir -p $out/tmp
+        '';
 
-      meta.mainProgram = name;
+      # Configure nix
+      setupNix = stdl.mkSetup "nix" [ ] ''
+        mkdir -p $out/etc
+        echo "sandbox = false" > $out/etc/nix.conf
+        echo "experimental-features = nix-command flakes" >> $out/etc/nix.conf
+      '';
+
+      # Configure direnv
+      setupDirenv = stdl.mkSetup "direnv"
+        [{
+          regex = "/home/user";
+          mode = "0744";
+          uid = 1000;
+          gid = 1000;
+        }]
+        (''
+          mkdir -p $out/etc
+          cat >$out/etc/direnv.toml << EOF
+          [global]
+          warn_timeout = "10m"
+          [whitelist]
+          prefix = [ "/" ]
+          EOF
+        '' + shellConfigs.bash);
+
+      entrypoint = stdl.writeScript {
+        name = "entrypoint";
+        text = ''
+          #!${l.getExe runtimeShell}
+
+          ${l.getExe runtimeShell}
+        '';
+      };
+    in
+    stdl.mkOCI inputs {
+      inherit entrypoint name tag labels perms;
+
+      uid = "1000";
+      gid = "1000";
+
+      setup = [
+        setupDirenv
+        setupNix
+        setupTemp
+        setupUser
+        setupWork
+      ] ++ setup;
+
+      layers = [
+        (n2c.buildLayer {
+          copyToRoot = [
+            (nixpkgs.buildEnv
+              {
+                name = "devshell";
+                paths = [
+                  devshell
+                  runtimeShell
+                  nixpkgs.coreutils
+                  nixpkgs.direnv
+                  nixpkgs.git
+                  nixpkgs.nix
+                  nixpkgs.gnused
+                ];
+                pathsToLink = [ "/bin" ];
+              })
+          ] ++ [ nixpkgs.cacert ];
+          maxLayers = 50;
+        })
+      ];
+
+      options = (l.recursiveUpdate options {
+        initializeNixDatabase = true;
+        nixUid = 1000;
+        nixGid = 1000;
+        config = {
+          Env = [
+            "DIRENV_CONFIG=/etc"
+            "HOME=/home/user"
+            "NIX_CONF_DIR=/etc"
+            "NIX_PAGER=cat"
+            "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
+            "USER=user"
+          ];
+        };
+      });
     };
 }
 

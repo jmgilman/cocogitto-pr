@@ -1,6 +1,6 @@
 {
-  inputs.n2c.url = "github:jmgilman/nix2container/change-owner";
-  inputs.std.url = "github:jmgilman/std/oci";
+  inputs.n2c.url = "github:jmgilman/nix2container/nix";
+  inputs.std.url = "github:jmgilman/std/patterns";
   inputs.nixpkgs.url = "nixpkgs";
   outputs = { std, ... } @ inputs:
     std.growOn

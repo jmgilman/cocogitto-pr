@@ -6,7 +6,7 @@ let
   l = nixpkgs.lib // builtins;
   stdl = std.std.lib;
 
-  setupWork = stdl.mkSetup "work" { } ''
+  setupWork = stdl.mkSetup "work" [ ] ''
     mkdir -p $out/etc
     cat >$out/etc/gitconfig <<EOF
     [user]
@@ -26,7 +26,7 @@ let
   };
 in
 {
-  default = stdl.mkOCI inputs
+  default = stdl.mkOpOCI inputs
     {
       name = "docker.io/cocogitto-pr";
       tag = "latest";
@@ -49,4 +49,22 @@ in
         '';
       };
     };
+  dev = cell.functions.mkDevOCI {
+    name = "docker.io/cocogitto-pr-dev";
+    tag = "latest";
+    devshell = inputs.cells.automation.devshells.default;
+    options = {
+      config.Volumes."/work" = { };
+      config.WorkingDir = "/work";
+    };
+    labels = {
+      title = "cocogitto-pr-dev";
+      version = "0.1.0";
+      url = "https://github.com/jmgilman/cocogitto-pr";
+      source = "https://github.com/jmgilman/cocogitto-pr";
+      description = ''
+        Dev container for cocogitto-pr
+      '';
+    };
+  };
 }
