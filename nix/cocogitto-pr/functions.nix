@@ -46,9 +46,15 @@ in
       };
 
       # Configure working directory
-      setupWork = stdl.ops.mkSetup "work" [ ] ''
-        mkdir -p $out/work
-      '';
+      setupWork = stdl.ops.mkSetup "work" [ ]
+        ''
+          mkdir -p $out/work
+          mkdir -p $out/etc
+          cat >$out/etc/gitconfig <<EOF
+          [safe]
+              directory = /work
+          EOF
+        '';
 
       # Configure tmp directory
       setupTemp = stdl.ops.mkSetup "tmp"
@@ -123,6 +129,8 @@ in
                   nixpkgs.direnv
                   nixpkgs.git
                   nixpkgs.nix
+                  nixpkgs.gawk
+                  nixpkgs.gnugrep
                   nixpkgs.gnused
                 ];
                 pathsToLink = [ "/bin" ];
@@ -145,6 +153,9 @@ in
             "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
             "USER=user"
           ];
+          Volumes = {
+            "/work" = { };
+          };
         };
       });
     };
