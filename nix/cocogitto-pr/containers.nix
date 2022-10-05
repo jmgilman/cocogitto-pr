@@ -4,9 +4,9 @@
 let
   inherit (inputs) nixpkgs std;
   l = nixpkgs.lib // builtins;
-  stdl = std.std.lib;
+  stdl = std.lib;
 
-  setupWork = stdl.mkSetup "work" [ ] ''
+  setupWork = stdl.ops.mkSetup "work" [ ] ''
     mkdir -p $out/etc
     cat >$out/etc/gitconfig <<EOF
     [user]
@@ -17,7 +17,7 @@ let
     EOF
     mkdir $out/work
   '';
-  setupUser = stdl.mkUser {
+  setupUser = stdl.ops.mkUser {
     user = "user";
     group = "user";
     uid = "1000";
@@ -26,7 +26,7 @@ let
   };
 in
 {
-  default = stdl.mkOpOCI inputs
+  default = stdl.ops.mkStandardOCI
     {
       name = "docker.io/cocogitto-pr";
       tag = "latest";

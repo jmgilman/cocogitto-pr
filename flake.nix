@@ -1,6 +1,6 @@
 {
-  inputs.n2c.url = "github:jmgilman/nix2container/nix";
-  inputs.std.url = "github:jmgilman/std/patterns";
+  inputs.std.inputs.n2c.url = "github:nlewo/nix2container";
+  inputs.std.url = "github:divnix/std/refactor_fix";
   inputs.nixpkgs.url = "nixpkgs";
   outputs = { std, ... } @ inputs:
     std.growOn

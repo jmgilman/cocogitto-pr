@@ -4,8 +4,8 @@
 let
   inherit (inputs) nixpkgs std;
   l = nixpkgs.lib // builtins;
-  n2c = inputs.n2c.packages.nix2container;
-  stdl = std.std.lib;
+  n2c = inputs.std.inputs.n2c.packages.${inputs.nixpkgs.system}.nix2container;
+  stdl = std.lib;
 in
 {
   mkDevOCI =
@@ -37,7 +37,7 @@ in
       };
 
       # Configure local user
-      setupUser = stdl.mkUser {
+      setupUser = stdl.ops.mkUser {
         user = "user";
         group = "user";
         uid = "1000";
@@ -46,12 +46,12 @@ in
       };
 
       # Configure working directory
-      setupWork = stdl.mkSetup "work" [ ] ''
+      setupWork = stdl.ops.mkSetup "work" [ ] ''
         mkdir -p $out/work
       '';
 
       # Configure tmp directory
-      setupTemp = stdl.mkSetup "tmp"
+      setupTemp = stdl.ops.mkSetup "tmp"
         [
           {
             regex = ".*";
@@ -63,14 +63,14 @@ in
         '';
 
       # Configure nix
-      setupNix = stdl.mkSetup "nix" [ ] ''
+      setupNix = stdl.ops.mkSetup "nix" [ ] ''
         mkdir -p $out/etc
         echo "sandbox = false" > $out/etc/nix.conf
         echo "experimental-features = nix-command flakes" >> $out/etc/nix.conf
       '';
 
       # Configure direnv
-      setupDirenv = stdl.mkSetup "direnv"
+      setupDirenv = stdl.ops.mkSetup "direnv"
         [{
           regex = "/home/user";
           mode = "0744";
@@ -87,7 +87,7 @@ in
           EOF
         '' + shellConfigs.bash);
 
-      entrypoint = stdl.writeScript {
+      entrypoint = stdl.ops.writeScript {
         name = "entrypoint";
         text = ''
           #!${l.getExe runtimeShell}
@@ -96,7 +96,7 @@ in
         '';
       };
     in
-    stdl.mkOCI inputs {
+    stdl.ops.mkOCI {
       inherit entrypoint name tag labels perms;
 
       uid = "1000";

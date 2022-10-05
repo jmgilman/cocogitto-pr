@@ -5,7 +5,7 @@
 let
   inherit (inputs) nixpkgs std;
   l = nixpkgs.lib // builtins;
-  stdl = std.std.lib;
+  stdl = std.lib;
 in
 rec {
   gitTiny = nixpkgs.gitMinimal.override { perlSupport = false; };
@@ -48,12 +48,12 @@ rec {
         maintainers = with maintainers; [ travisdavis-ops ];
       };
     };
-  main = stdl.writeScript {
+  main = stdl.ops.writeScript {
     name = "main";
     text = (builtins.readFile ./scripts/main.sh);
     runtimeShell = nixpkgs.pkgsStatic.bash.out;
   };
-  main_operable = stdl.mkOperable {
+  main_operable = stdl.ops.mkOperable {
     package = main;
     runtimeScript = ''
       ${l.getExe main} "''${1}" "''${2}"
