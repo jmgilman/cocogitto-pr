@@ -1,0 +1,6 @@
+{
+    "image": "cocogitto-pr-dev",
+    "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash"
+    }
+}

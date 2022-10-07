@@ -23,6 +23,7 @@ let
     uid = "1000";
     gid = "1000";
     withHome = true;
+    withRoot = true;
   };
 in
 {
@@ -53,10 +54,6 @@ in
     name = "docker.io/cocogitto-pr-dev";
     tag = "latest";
     devshell = inputs.cells.automation.devshells.default;
-    options = {
-      config.Volumes."/work" = { };
-      config.WorkingDir = "/work";
-    };
     labels = {
       title = "cocogitto-pr-dev";
       version = "0.1.0";
