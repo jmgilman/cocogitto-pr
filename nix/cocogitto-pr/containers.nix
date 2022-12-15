@@ -50,9 +50,11 @@ in
         '';
       };
     };
-  dev = cell.functions.mkDevOCI {
+  dev = stdl.ops.mkDevOCI {
     name = "docker.io/cocogitto-pr-dev";
     tag = "latest";
+    vscode = true;
+    setup = [ setupWork setupUser ];
     devshell = inputs.cells.automation.devshells.default;
     labels = {
       title = "cocogitto-pr-dev";
