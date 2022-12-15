@@ -45,7 +45,7 @@ in
       };
     };
   };
-  prettier = std.std.lib.mkNixago
+  prettier = std.lib.dev.mkNixago
     {
       configData = {
         printWidth = 80;
