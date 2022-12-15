@@ -13,7 +13,6 @@
           (std.blockTypes.nixago "configs")
           (std.blockTypes.containers "containers")
           (std.blockTypes.installables "packages")
-          (std.blockTypes.functions "functions")
         ];
       }
       {
