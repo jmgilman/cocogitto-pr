@@ -101,22 +101,6 @@
         "type": "github"
       }
     },
-    "mdbook-kroki-preprocessor": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1661755005,
-        "narHash": "sha256-1TJuUzfyMycWlOQH67LR63/ll2GDZz25I3JfScy/Jnw=",
-        "owner": "JoelCourtney",
-        "repo": "mdbook-kroki-preprocessor",
-        "rev": "93adb5716d035829efed27f65f2f0833a7d3e76f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "JoelCourtney",
-        "repo": "mdbook-kroki-preprocessor",
-        "type": "github"
-      }
-    },
     "n2c": {
       "inputs": {
         "flake-utils": [
@@ -129,11 +113,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1668413124,
-        "narHash": "sha256-k0hGnuVjn6pFXmy4yYxpNuRXh/zR1KXB4l1EcAlQMzI=",
+        "lastModified": 1671269339,
+        "narHash": "sha256-KR2SXh4c2Y+bgbCfXjTGJ74O9/u4CAPFA0KYZHhKf5Q=",
         "owner": "nlewo",
         "repo": "nix2container",
-        "rev": "f128a164fed3aa97ae8cf15cd7cb15709178dda4",
+        "rev": "6800fff45afecc7e47c334d14cf2b2f4f25601a0",
         "type": "github"
       },
       "original": {
@@ -237,7 +221,6 @@
           "std",
           "blank"
         ],
-        "mdbook-kroki-preprocessor": "mdbook-kroki-preprocessor",
         "microvm": [
           "std",
           "blank"
@@ -249,11 +232,11 @@
         "yants": "yants"
       },
       "locked": {
-        "lastModified": 1670364577,
-        "narHash": "sha256-dMIUIOv5WDQY/bHBEoQH/Z2v7qU01CxNB1Uswq8QSnk=",
+        "lastModified": 1671754860,
+        "narHash": "sha256-bCscaTKpeAzjufl76nq9cj6pz4iaRAH1Pjy28fml/x8=",
         "owner": "divnix",
         "repo": "std",
-        "rev": "28ab21483243cb32203bc675bebab8306c466e90",
+        "rev": "ade681ed83e6b4bcf8e05f3082e6fa349f7eb3ec",
         "type": "github"
       },
       "original": {
