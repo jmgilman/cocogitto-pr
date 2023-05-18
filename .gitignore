@@ -3,6 +3,10 @@ result
 std
 
 # nixago: ignore-linked-files
+/.prettierrc
+/lefthook.yml
+/.conform.yaml
+/treefmt.toml
 treefmt.toml
 .prettierrc
 lefthook.yml

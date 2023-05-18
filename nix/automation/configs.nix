@@ -6,8 +6,8 @@ let
   l = nixpkgs.lib // builtins;
 in
 {
-  conform = std.std.nixago.conform {
-    configData = {
+  conform = std.lib.cfg.conform {
+    data = {
       commit = {
         header = { length = 89; };
         conventional = {
@@ -27,8 +27,8 @@ in
       };
     };
   };
-  lefthook = std.std.nixago.lefthook {
-    configData = {
+  lefthook = std.lib.cfg.lefthook {
+    data = {
       commit-msg = {
         commands = {
           conform = {
@@ -47,7 +47,7 @@ in
   };
   prettier = std.lib.dev.mkNixago
     {
-      configData = {
+      data = {
         printWidth = 80;
         proseWrap = "always";
       };
@@ -55,9 +55,9 @@ in
       format = "json";
       packages = [ nixpkgs.nodePackages.prettier ];
     };
-  treefmt = std.std.nixago.treefmt
+  treefmt = std.lib.cfg.treefmt
     {
-      configData = {
+      data = {
         formatter = {
           nix = {
             command = "nixpkgs-fmt";

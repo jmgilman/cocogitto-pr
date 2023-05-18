@@ -15,16 +15,10 @@ rec {
     in
     rustPlatform.buildRustPackage rec {
       pname = "cocogitto";
-      version = "5.2.0";
+      version = "5.3.1";
 
-      src = fetchFromGitHub {
-        owner = "cocogitto";
-        repo = pname;
-        rev = version;
-        sha256 = "sha256-ZjDZMI84z8riRtidZVeCktwJUMkZU28E23MveJSD7xY=";
-      };
-
-      cargoSha256 = "sha256-oaWWAVTKxrshfvqE+HMQ1WeeEz8lOE7qc6RrgSjDtdU=";
+      src = inputs.cocogitto;
+      cargoLock.lockFile = inputs.cocogitto + /Cargo.lock;
 
       # Test depend on git configuration that would likly exist in a normal user enviroment
       # and might be failing to create the test repository it works in.
@@ -43,7 +37,7 @@ rec {
 
       meta = with lib; {
         description = "A set of cli tools for the conventional commit and semver specifications";
-        homepage = "https://github.com/oknozor/cocogitto";
+        homepage = "https://github.com/cocogitto/cocogitto";
         license = licenses.mit;
         maintainers = with maintainers; [ travisdavis-ops ];
       };

@@ -8,17 +8,17 @@ in
 l.mapAttrs (_: std.lib.dev.mkShell) {
   default = { ... }: {
     name = "cocogitto-pr devshell";
-    imports = [ std.std.devshellProfiles.default ];
     nixago = [
       cell.configs.conform
       cell.configs.lefthook
       cell.configs.prettier
       cell.configs.treefmt
     ];
-    packages = [
-      nixpkgs.cocogitto
-    ];
     commands = [
+      {
+        package = inputs.cells.cocogitto-pr.packages.cocogitto;
+        name = "cog";
+      }
       {
         name = "fmt";
         command = "treefmt";
