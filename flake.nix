@@ -1,7 +1,10 @@
 {
-  inputs.std.inputs.n2c.url = "github:nlewo/nix2container";
-  inputs.std.url = "github:divnix/std";
+  inputs.std.url = "github:divnix/std/v0.21.4";
   inputs.nixpkgs.url = "nixpkgs";
+  inputs.cocogitto = {
+    url = "github:cocogitto/cocogitto?ref=5.3.1";
+    flake = false;
+  };
 
   outputs = { std, ... } @ inputs:
     std.growOn
